@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// LoggingMiddleware logs requests with method, path, status, and duration
+// LoggingMiddleware logs every request with status, method, path, and duration.
 func LoggingMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -18,7 +18,7 @@ func LoggingMiddleware() gin.HandlerFunc {
 	}
 }
 
-// RecoveryMiddleware can be used to recover from panics and return JSON error
+// RecoveryMiddleware recovers from panics and returns a standardized JSON error.
 func RecoveryMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {

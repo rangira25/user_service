@@ -12,9 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
-	"github.com/swaggo/files"
-    "github.com/swaggo/gin-swagger"
-    _ "github.com/rangira25/user_service/docs"
+	_ "github.com/rangira25/user_service/docs"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"github.com/rangira25/user_service/internal/config"
 	"github.com/rangira25/user_service/internal/db"
@@ -25,12 +25,26 @@ import (
 	"github.com/rangira25/user_service/internal/service"
 )
 
+// @title User Service API
+// @version 1.0
+// @description This API manages users, authentication, and roles.
+// @termsOfService http://swagger.io/terms/
+// @contact.name API Support
+// @contact.email support@example.com
+// @license.name MIT
+// @host localhost:8080
+// @BasePath /api/v1
+
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
+
 func main() {
-	_ = godotenv.Load() 
+	_ = godotenv.Load()
 
-	cfg := config.LoadConfig() 
+	cfg := config.LoadConfig()
 
-	d := db.ConnectPostgres(cfg) 
+	d := db.ConnectPostgres(cfg)
 
 	// Ensure PostgreSQL extensions exist (run once)
 	_ = d.Exec("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";").Error
@@ -48,7 +62,6 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(pkg.LoggingMiddleware())
-
 
 	// register routes
 	http.RegisterRoutes(r, handler)

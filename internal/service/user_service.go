@@ -3,19 +3,26 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/rangira25/user_service/internal/config"
 	"github.com/rangira25/user_service/internal/domain"
 	"github.com/rangira25/user_service/internal/repository"
 	"golang.org/x/crypto/bcrypt"
 )
 
+
+
 // Predefined errors
 var (
-	ErrUserNotFound = errors.New("user not found")
+	ErrUserNotFound     = errors.New("user not found")
+	ErrInvalidCreds     = errors.New("invalid credentials")
+	ErrEmailAlreadyUsed = errors.New("email already in use")
 )
 
-// UserService defines the public interface
+// UserService defines public interface (called by handler)
 type UserService interface {
 	CreateUser(ctx context.Context, req domain.CreateUserReq) (*domain.UserResp, error)
 	GetUser(ctx context.Context, id string) (*domain.UserResp, error)
@@ -25,6 +32,7 @@ type UserService interface {
 	DeleteUser(ctx context.Context, id string) error
 	RestoreUser(ctx context.Context, id string) error
 	AdminResetPassword(ctx context.Context, id, newPassword string) error
+	Login(ctx context.Context, req domain.LoginReq) (*domain.LoginResp, error)
 }
 
 // Concrete implementation
@@ -37,11 +45,11 @@ func NewUserService(r repository.UserRepository) UserService {
 	return &userService{repo: r}
 }
 
-// CRUD & Actions 
+// ===================== CRUD Operations =====================
 
 func (s *userService) CreateUser(ctx context.Context, req domain.CreateUserReq) (*domain.UserResp, error) {
 	if existing, _ := s.repo.GetByEmail(ctx, req.Email); existing != nil {
-		return nil, errors.New("email already in use")
+		return nil, ErrEmailAlreadyUsed
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -64,7 +72,6 @@ func (s *userService) CreateUser(ctx context.Context, req domain.CreateUserReq) 
 	}
 
 	logAudit("CREATE", user.ID)
-
 	return toResp(user), nil
 }
 
@@ -108,7 +115,6 @@ func (s *userService) UpdateUser(ctx context.Context, id string, req domain.Upda
 	}
 
 	logAudit("UPDATE", u.ID)
-
 	return toResp(u), nil
 }
 
@@ -154,11 +160,47 @@ func (s *userService) AdminResetPassword(ctx context.Context, id, newPassword st
 	}
 
 	logAudit("RESET_PASSWORD", id)
-
 	return nil
 }
 
-//  Helper Functions 
+// ===================== LOGIN (JWT Auth) =====================
+
+func (s *userService) Login(ctx context.Context, req domain.LoginReq) (*domain.LoginResp, error) {
+	// 1. Get user by email
+	u, err := s.repo.GetByEmail(ctx, req.Email)
+	if err != nil {
+		return nil, ErrUserNotFound
+	}
+
+	// 2. Verify password
+	if err := bcrypt.CompareHashAndPassword([]byte(*u.PasswordHash), []byte(req.Password)); err != nil {
+		return nil, ErrInvalidCreds
+	}
+
+	// 3. Use system current time for token
+	
+	// 4. Create JWT claims
+	claims := jwt.MapClaims{
+    "user_id": fmt.Sprintf("%d", u.ID),
+    "role":    u.Role,
+    "exp":     jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+    "iat":     jwt.NewNumericDate(time.Now()),
+}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenStr, err := token.SignedString([]byte(config.JWTSecret))
+
+	// 5. Generate JWT token
+	
+	if err != nil {
+		return nil, err
+	}
+
+	logAudit("LOGIN", u.ID)
+	return &domain.LoginResp{Token: tokenStr}, nil
+}
+
+// ===================== Helpers =====================
 
 func toResp(u *domain.User) *domain.UserResp {
 	return &domain.UserResp{
@@ -174,5 +216,3 @@ func toResp(u *domain.User) *domain.UserResp {
 func ptrString(s string) *string {
 	return &s
 }
-
-
